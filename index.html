@@ -2,6 +2,8 @@
 <html lang="uz"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Music Vibe Lab</title>
+<meta name="theme-color" content="#0b0b14"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Vibe Lab"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 :root{--bg:#0b0b14;--card:#14141f;--tx:#eceaf5;--mut:#8b89a0;--ac:#a855f7;--bd:#262638;--pc:#22d3ee;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media(prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f3f1fa;--card:#fff;--tx:#1c1b2a;--mut:#6b6a80;--bd:#ddd9ee}}
@@ -28,6 +30,12 @@ label.ch:has(input:checked){background:var(--ac);color:#fff}label.ch input{displ
 #pl{display:flex;flex-direction:column;gap:4px;max-height:130px;overflow:auto;margin-top:8px}
 #pl button{text-align:left;padding:6px 10px;font-size:13px}
 #st{font-size:13px;color:var(--mut);min-height:18px}
+body{min-height:100dvh;overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent}
+button,label.ch{touch-action:manipulation;user-select:none;-webkit-user-select:none}
+@media(min-width:960px){.w{max-width:1040px}canvas{height:380px}}
+@media(max-width:640px){.w{padding:10px}h1{font-size:19px}canvas{height:210px}.card{padding:11px;border-radius:14px}
+button,select,label.ch{min-height:42px}.row{gap:8px}#fx label:not(.ch){flex:1 1 44%}.t{min-width:70px}#sk{order:5;flex:1 1 100%}input[type=range]{height:28px}}
+@media(max-height:480px) and (orientation:landscape){canvas{height:55vh}}
 </style></head><body><div class="w">
 <h1>🎧 Music Vibe Lab</h1>
 <div class="card" id="drop"><div style="color:var(--mut)">🎵 Musiqa(lar)ni shu yerga tashla yoki bosib tanla</div><div id="fn" style="margin-top:6px;color:var(--tx)"></div>
@@ -72,7 +80,7 @@ label.ch:has(input:checked){background:var(--ac);color:#fff}label.ch input{displ
 <label>Ustunlar <input type="range" id="nb" min="16" max="128" value="64"></label>
 <select id="sty"><option value="bar">Ustun</option><option value="mir">Ko'zgu</option><option value="rad">Doira</option><option value="wave">To'lqin</option></select></div>
 <div class="row"><label class="ch"><input type="checkbox" id="gl" checked>Glow</label><label class="ch"><input type="checkbox" id="pu" checked>Pulsatsiya</label>
-<label class="ch"><input type="checkbox" id="pt" checked>Zarrachalar</label><button id="fs">⛶ To'liq ekran</button></div></div>
+<label class="ch"><input type="checkbox" id="pt" checked>Zarrachalar</label><button id="fs">⛶ To'liq ekran</button><button id="ins" hidden>📲 O'rnatish</button></div></div>
 </div>
 <script>
 const $=id=>document.getElementById(id),V=id=>+$(id).value,C=id=>$(id).checked,audio=new Audio();
@@ -108,7 +116,7 @@ function add(fs){[...fs].filter(f=>f.type.startsWith('audio')||/\.(m4a|mp3|wav|o
 function pl(){const p=$('pl');p.textContent='';if(list.length<2)return;
   list.forEach((f,i)=>{const b=document.createElement('button');b.textContent=(i+1)+'. '+f.name;if(i==cur)b.className='act';b.onclick=()=>play(i);p.append(b)})}
 function play(i){cur=i;file=list[i];if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(file);audio.src=url;audio.loop=C('lp');
-  $('fn').textContent=file.name;$('pp').disabled=$('dl').disabled=false;init();ctx.resume();audio.play();A=Bp=0;ab=false;pl();$('bpm').textContent='BPM ...';
+  $('fn').textContent=file.name;$('pp').disabled=$('dl').disabled=false;init();ctx.resume();audio.play();ms();A=Bp=0;ab=false;pl();$('bpm').textContent='BPM ...';
   dec=file.arrayBuffer().then(a=>ctx.decodeAudioData(a));dec.then(bpm).catch(()=>$('bpm').textContent='')}
 $('drop').onclick=()=>$('f').click();$('f').onchange=e=>add(e.target.files);
 ['dragover','dragenter'].forEach(e=>$('drop').addEventListener(e,ev=>{ev.preventDefault();$('drop').classList.add('on')}));
@@ -119,7 +127,7 @@ audio.onended=()=>{if(cur<list.length-1)play(cur+1)};
 
 // ---- player
 $('pp').onclick=()=>{init();ctx.resume();audio.paused?audio.play():audio.pause()};
-audio.onplay=()=>$('pp').textContent='⏸ Pause';audio.onpause=()=>$('pp').textContent='▶ Play';
+audio.onplay=()=>{$('pp').textContent='⏸ Pause';wl()};audio.onpause=()=>{$('pp').textContent='▶ Play';if(wlk){wlk.release();wlk=null}};
 audio.ontimeupdate=()=>{if(!seeking)$('sk').value=audio.duration?audio.currentTime/audio.duration*1000:0;$('tm').textContent=fmt(audio.currentTime)+' / '+fmt(audio.duration)};
 $('sk').oninput=e=>{seeking=true;audio.currentTime=e.target.value/1000*audio.duration};$('sk').onchange=()=>seeking=false;
 $('vol').oninput=()=>{if(vol)vol.gain.value=$('vol').value};
@@ -177,7 +185,7 @@ let lvl=[],pk=[],pv=[],ceil=-38,bass=0,pb=0,fd=null,pa=[];
 const LO=40,HI=14000,RANGE=40;
 function draw(){
   requestAnimationFrame(draw);
-  const dpr=devicePixelRatio||1,W=cv.clientWidth*dpr|0,H=cv.clientHeight*dpr|0;
+  const dpr=Math.min(devicePixelRatio||1,2),W=cv.clientWidth*dpr|0,H=cv.clientHeight*dpr|0;
   if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H}
   if(ab&&audio.currentTime>=Bp)audio.currentTime=A;
   const N=+$('nb').value,sty=$('sty').value,h=performance.now()/30%360,rb=C('rb'),
@@ -228,4 +236,16 @@ function draw(){
   pb=bass;
 }
 draw();
+// ---- webapp: ekran o'chmasin, qulf ekrani boshqaruvi, o'rnatish, offline
+let wlk;async function wl(){try{if(!audio.paused&&!wlk&&navigator.wakeLock){wlk=await navigator.wakeLock.request('screen');wlk.onrelease=()=>wlk=null}}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)wl()});
+function ms(){if(!('mediaSession' in navigator))return;navigator.mediaSession.metadata=new MediaMetadata({title:file.name.replace(/\.[^.]+$/,''),artist:'Music Vibe Lab',artwork:[{src:'icon-512.png',sizes:'512x512',type:'image/png'}]});
+  [['play',()=>$('pp').click()],['pause',()=>$('pp').click()],['previoustrack',()=>$('pv').click()],['nexttrack',()=>$('nx').click()]].forEach(([a,f])=>{try{navigator.mediaSession.setActionHandler(a,f)}catch(e){}})}
+if(!$('vz').requestFullscreen)$('fs').hidden=true;
+let dp;addEventListener('beforeinstallprompt',e=>{e.preventDefault();dp=e;$('ins').hidden=false});
+const std=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+if(/iphone|ipad|ipod/i.test(navigator.userAgent)&&!std)$('ins').hidden=false;
+$('ins').onclick=async()=>{if(dp){dp.prompt();await dp.userChoice;dp=null;$('ins').hidden=true}else alert("Safari: Ulashish (⬆) tugmasi > «Ona ekranga qo'shish»")};
+addEventListener('appinstalled',()=>$('ins').hidden=true);
+if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script></body></html>
