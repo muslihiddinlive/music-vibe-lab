@@ -81,7 +81,8 @@ button,select,label.ch{min-height:42px}.row{gap:8px}#fx label:not(.ch){flex:1 1 
 <label>Ustunlar <input type="range" id="nb" min="16" max="128" value="64"></label>
 <select id="sty"><option value="bar">Ustun</option><option value="mir">Ko'zgu</option><option value="rad">Doira</option><option value="wave">To'lqin</option></select></div>
 <div class="row"><label class="ch"><input type="checkbox" id="gl" checked>Glow</label><label class="ch"><input type="checkbox" id="pu" checked>Pulsatsiya</label>
-<label class="ch"><input type="checkbox" id="pt" checked>Zarrachalar</label><button id="fs">⛶ To'liq ekran</button><button id="ins" hidden>📲 O'rnatish</button></div></div>
+<label class="ch"><input type="checkbox" id="pt" checked>Zarrachalar</label><button id="fs">⛶ To'liq ekran</button><button id="ins" hidden>📲 O'rnatish</button></div>
+<div class="row"><button id="bgup">🖼 Fon rasm</button><button id="bgth">🎵 Thumbnail</button><button id="bgx" disabled>✕ Fon</button><input id="bgf" type="file" accept="image/*" hidden></div></div>
 </div>
 <div style="text-align:center;color:var(--mut);font-size:12px;margin:18px 0 6px">Powered by: <a href="https://t.me/LaborantRobot" style="color:var(--ac);text-decoration:none">@LaborantRobot</a> on telegram</div>
 <script>
@@ -197,6 +198,55 @@ $('dl').onclick=async()=>{
     await deliver(blob||wav(o),base+'_fx.'+ext);st(ext==='mp3'?'Tayyor! ✅':'Tayyor (WAV) ✅')}catch(e){st('Xatolik: '+e.message)}
   $('dl').disabled=false};
 
+// ---- fon rasm (vizualizator orqasida, xiragina ko'rinadi)
+let bgImg=null,bgUrl=null;
+function setBg(blob){
+  if(!blob||!blob.size)return st("Rasm topilmadi.");
+  if(bgUrl)URL.revokeObjectURL(bgUrl);
+  bgUrl=URL.createObjectURL(blob);
+  const img=new Image();
+  img.onload=()=>{bgImg=img;$('bgx').disabled=false};
+  img.onerror=()=>st("Rasmni ochib bo'lmadi.");
+  img.src=bgUrl;
+}
+$('bgup').onclick=()=>$('bgf').click();
+$('bgf').onchange=e=>{const f=e.target.files[0];if(f)setBg(f)};
+$('bgx').onclick=()=>{bgImg=null;if(bgUrl){URL.revokeObjectURL(bgUrl);bgUrl=null}$('bgx').disabled=true};
+
+// ID3v2 APIC (albom muqovasi) ni audio fayldan ajratib olish — faqat mp3/ID3v2
+// uchun ishlaydi; topilmasa, user "🖼 Fon rasm" orqali o'zi tanlashi mumkin.
+async function extractThumb(f){
+  try{
+    const b=new Uint8Array(await f.slice(0,2*1024*1024).arrayBuffer());
+    if(b[0]!==0x49||b[1]!==0x44||b[2]!==0x33)return null; // 'ID3'
+    const ver=b[3],ss=i=>((b[i]&0x7f)<<21)|((b[i+1]&0x7f)<<14)|((b[i+2]&0x7f)<<7)|(b[i+3]&0x7f);
+    const end=10+ss(6);let p=10;
+    while(p<end-10){
+      const id=String.fromCharCode(b[p],b[p+1],b[p+2],b[p+3]);
+      if(!/^[A-Z0-9]{4}$/.test(id))break;
+      const size=ver>=4?ss(p+4):((b[p+4]<<24)|(b[p+5]<<16)|(b[p+6]<<8)|b[p+7]);
+      if(!size||size<0||p+10+size>end)break;
+      const fs=p+10;
+      if(id==='APIC'){
+        let q=fs+1,mEnd=q;while(b[mEnd]&&mEnd<fs+size)mEnd++;
+        const mime=new TextDecoder().decode(b.slice(q,mEnd))||'image/jpeg';
+        q=mEnd+1+1;let dEnd=q;while(b[dEnd]&&dEnd<fs+size)dEnd++;
+        q=dEnd+1;
+        return new Blob([b.slice(q,fs+size)],{type:mime.startsWith('image')?mime:'image/jpeg'});
+      }
+      p=fs+size;
+    }
+  }catch(e){}
+  return null;
+}
+$('bgth').onclick=async()=>{
+  if(!file)return st('Avval musiqa tanlang.');
+  st('Thumbnail qidirilmoqda...');
+  const blob=await extractThumb(file);
+  if(blob){setBg(blob);st('Thumbnail topildi ✅')}
+  else st("Bu fayldan rasm topilmadi — \"🖼 Fon rasm\" orqali o'zingiz yuklang.");
+};
+
 // ---- vizualizatsiya
 const cv=$('cv'),g=cv.getContext('2d'),td=new Uint8Array(2048);
 let lvl=[],pk=[],pv=[],ceil=-38,bass=0,pb=0,fd=null,pa=[];
@@ -210,6 +260,14 @@ function draw(){
     k1=rb?`hsl(${h},90%,55%)`:$('c1').value,k2=rb?`hsl(${(h+70)%360},90%,60%)`:$('c2').value;
   document.documentElement.style.setProperty('--pc',k2);document.documentElement.style.setProperty('--pu',C('pu')?bass.toFixed(2):0);
   g.clearRect(0,0,W,H);
+  if(bgImg){
+    // "cover" kabi: nisbatni buzmasdan butun canvasni to'ldiradi (uzun/qisqa rasm ham avto moslashadi),
+    // xiragina (past shaffoflik + biroz loyqa) — audiografika orqasida "hissiy fon" sifatida ko'rinadi
+    g.save();g.filter='blur('+(3*dpr)+'px)';g.globalAlpha=.35;
+    const ir=bgImg.width/bgImg.height,cr=W/H;let dw,dh,dx,dy;
+    if(ir>cr){dh=H;dw=H*ir;dx=(W-dw)/2;dy=0}else{dw=W;dh=W/ir;dx=0;dy=(H-dh)/2}
+    g.drawImage(bgImg,dx,dy,dw,dh);g.restore();
+  }
   if(C('pu')){g.fillStyle=k2;g.globalAlpha=bass*.14;g.fillRect(0,0,W,H);g.globalAlpha=1}
   if(lvl.length!==N){lvl=Array(N).fill(0);pk=Array(N).fill(0);pv=Array(N).fill(0)}
   const live=an&&!audio.paused;
