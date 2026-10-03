@@ -79,7 +79,8 @@ button,select,label.ch{min-height:42px}.row{gap:8px}#fx label:not(.ch){flex:1 1 
 <label class="ch"><input type="checkbox" id="rb">🌈 Rainbow</label></div>
 <div class="row"><label>Past <input type="color" id="c1" value="#7c3aed"></label><label>Yuqori <input type="color" id="c2" value="#22d3ee"></label>
 <label>Ustunlar <input type="range" id="nb" min="16" max="128" value="64"></label>
-<select id="sty"><option value="bar">Ustun</option><option value="mir">Ko'zgu</option><option value="rad">Doira</option><option value="wave">To'lqin</option></select></div>
+<select id="sty"><option value="bar">Ustun</option><option value="mir">Ko'zgu</option><option value="rad">Doira</option><option value="wave">To'lqin</option></select>
+<label>Bo'yi <input type="range" id="hgt" min="20" max="200" value="100"></label></div>
 <div class="row"><label class="ch"><input type="checkbox" id="gl" checked>Glow</label><label class="ch"><input type="checkbox" id="pu" checked>Pulsatsiya</label>
 <label class="ch"><input type="checkbox" id="pt" checked>Zarrachalar</label><button id="fs">⛶ To'liq ekran</button><button id="ins" hidden>📲 O'rnatish</button></div>
 <div class="row"><button id="bgup">🖼 Fon rasm</button><button id="bgth">🎵 Thumbnail</button><button id="bgx" disabled>✕ Fon</button><input id="bgf" type="file" accept="image/*" hidden></div>
@@ -257,7 +258,7 @@ function draw(){
   const dpr=Math.min(devicePixelRatio||1,2),W=cv.clientWidth*dpr|0,H=cv.clientHeight*dpr|0;
   if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H}
   if(ab&&audio.currentTime>=Bp)audio.currentTime=A;
-  const N=+$('nb').value,sty=$('sty').value,h=performance.now()/30%360,rb=C('rb'),
+  const N=+$('nb').value,sty=$('sty').value,HGT=+$('hgt').value/100,h=performance.now()/30%360,rb=C('rb'),
     k1=rb?`hsl(${h},90%,55%)`:$('c1').value,k2=rb?`hsl(${(h+70)%360},90%,60%)`:$('c2').value;
   document.documentElement.style.setProperty('--pc',k2);document.documentElement.style.setProperty('--pu',C('pu')?bass.toFixed(2):0);
   g.clearRect(0,0,W,H);
@@ -291,19 +292,19 @@ function draw(){
   bass=bass*.6+(bs/nb)*.4;
   g.shadowColor=k2;g.shadowBlur=C('gl')?(4+bass*26)*dpr:0;
   if(sty==='rad'){
-    const cx=W/2,cy=H/2,m=Math.min(W,H),R0=m*.2*(1+bass*.1),L=m*.3,gr=g.createRadialGradient(cx,cy,R0,cx,cy,R0+L);gr.addColorStop(0,k1);gr.addColorStop(1,k2);
+    const cx=W/2,cy=H/2,m=Math.min(W,H),R0=m*.2*(1+bass*.1),L=m*.3*HGT,gr=g.createRadialGradient(cx,cy,R0,cx,cy,R0+L);gr.addColorStop(0,k1);gr.addColorStop(1,k2);
     g.strokeStyle=gr;g.lineWidth=Math.max(2,Math.PI*R0/N*.8);g.lineCap='round';const P=new Path2D();
     for(let i=0;i<N;i++){const a=Math.PI*(i+.5)/N,l=3*dpr+lvl[i]*L;for(const s of[1,-1]){const x=Math.sin(a)*s,y=Math.cos(a);P.moveTo(cx+x*R0,cy+y*R0);P.lineTo(cx+x*(R0+l),cy+y*(R0+l))}}
     g.stroke(P);
   }else if(sty==='wave'){
     if(live)an.getByteTimeDomainData(td);const gr=g.createLinearGradient(0,0,W,0);gr.addColorStop(0,k1);gr.addColorStop(1,k2);
     const P=new Path2D(),step=Math.max(1,W/400);
-    for(let x=0;x<=W;x+=step){const v=live?(td[Math.min(2047,x/W*2048|0)]-128)/128:0,y=H/2+v*H*.45*(1+bass*.5);x?P.lineTo(x,y):P.moveTo(x,y)}
+    for(let x=0;x<=W;x+=step){const v=live?(td[Math.min(2047,x/W*2048|0)]-128)/128:0,y=H/2+v*H*.45*HGT*(1+bass*.5);x?P.lineTo(x,y):P.moveTo(x,y)}
     g.strokeStyle=gr;g.lineWidth=3*dpr;g.lineJoin='round';g.stroke(P);
   }else{
     const mir=sty==='mir',base=mir?H/2:H,mh=base,bw=W/N,gr=g.createLinearGradient(0,mir?0:H,0,mir?H/2:0);gr.addColorStop(0,k1);gr.addColorStop(1,k2);
     const P=new Path2D(),M=new Path2D(),Cp=new Path2D();
-    for(let i=0;i<N;i++){const hh=Math.max(3*dpr,lvl[i]*mh*.96),x=i*bw+bw*.15,w=bw*.7;
+    for(let i=0;i<N;i++){const hh=Math.max(3*dpr,lvl[i]*mh*.96*HGT),x=i*bw+bw*.15,w=bw*.7;
       P.rect(x,base-hh,w,hh);if(mir)M.rect(x,base,w,hh);Cp.rect(x,base-pk[i]*mh*.96-4*dpr,w,2.5*dpr)}
     g.fillStyle=gr;g.fill(P);if(mir){g.globalAlpha=.5;g.fill(M);g.globalAlpha=1}
     g.shadowBlur=0;g.fillStyle=k2;g.fill(Cp);
