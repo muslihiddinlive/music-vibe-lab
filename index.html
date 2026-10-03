@@ -82,7 +82,8 @@ button,select,label.ch{min-height:42px}.row{gap:8px}#fx label:not(.ch){flex:1 1 
 <select id="sty"><option value="bar">Ustun</option><option value="mir">Ko'zgu</option><option value="rad">Doira</option><option value="wave">To'lqin</option></select></div>
 <div class="row"><label class="ch"><input type="checkbox" id="gl" checked>Glow</label><label class="ch"><input type="checkbox" id="pu" checked>Pulsatsiya</label>
 <label class="ch"><input type="checkbox" id="pt" checked>Zarrachalar</label><button id="fs">⛶ To'liq ekran</button><button id="ins" hidden>📲 O'rnatish</button></div>
-<div class="row"><button id="bgup">🖼 Fon rasm</button><button id="bgth">🎵 Thumbnail</button><button id="bgx" disabled>✕ Fon</button><input id="bgf" type="file" accept="image/*" hidden></div></div>
+<div class="row"><button id="bgup">🖼 Fon rasm</button><button id="bgth">🎵 Thumbnail</button><button id="bgx" disabled>✕ Fon</button><input id="bgf" type="file" accept="image/*" hidden></div>
+<div class="row"><label>⬅️➡️ Fon joyi<input type="range" id="bgpx" min="-100" max="100" value="0"></label><label>⬆️⬇️ Fon joyi<input type="range" id="bgpy" min="-100" max="100" value="0"></label></div></div>
 </div>
 <div style="text-align:center;color:var(--mut);font-size:12px;margin:18px 0 6px">Powered by: <a href="https://t.me/LaborantRobot" style="color:var(--ac);text-decoration:none">@LaborantRobot</a> on telegram</div>
 <script>
@@ -266,6 +267,10 @@ function draw(){
     g.save();g.filter='blur('+(3*dpr)+'px)';g.globalAlpha=.35;
     const ir=bgImg.width/bgImg.height,cr=W/H;let dw,dh,dx,dy;
     if(ir>cr){dh=H;dw=H*ir;dx=(W-dw)/2;dy=0}else{dw=W;dh=W/ir;dx=0;dy=(H-dh)/2}
+    // Fonni qo'lda siljitish (chapga/o'ngga, yuqoriga/pastga) — faqat haqiqatda
+    // "ortiqcha" (kesilgan) qismi bor tomonda ta'sir qiladi, aks holda 0*narsa=0
+    const px=+$('bgpx').value/100,py=+$('bgpy').value/100;
+    dx*=(1+px);dy*=(1+py);
     g.drawImage(bgImg,dx,dy,dw,dh);g.restore();
   }
   if(C('pu')){g.fillStyle=k2;g.globalAlpha=bass*.14;g.fillRect(0,0,W,H);g.globalAlpha=1}
