@@ -84,6 +84,7 @@ button,select,label.ch{min-height:42px}.row{gap:8px}#fx label:not(.ch){flex:1 1 
 <div class="row"><label class="ch"><input type="checkbox" id="gl" checked>Glow</label><label class="ch"><input type="checkbox" id="pu" checked>Pulsatsiya</label>
 <label class="ch"><input type="checkbox" id="pt" checked>Zarrachalar</label><button id="fs">⛶ To'liq ekran</button><button id="ins" hidden>📲 O'rnatish</button></div>
 <div class="row"><button id="bgup">🖼 Fon rasm</button><button id="bgth">🎵 Thumbnail</button><button id="bgx" disabled>✕ Fon</button><input id="bgf" type="file" accept="image/*" hidden></div>
+<div class="row"><button id="rec">⏺ Ekran yozish</button><span id="rect" style="color:var(--mut);font-size:12px"></span></div>
 <div class="row"><label>⬅️➡️ Fon joyi<input type="range" id="bgpx" min="-100" max="100" value="0"></label><label>⬆️⬇️ Fon joyi<input type="range" id="bgpy" min="-100" max="100" value="0"></label></div></div>
 </div>
 <div style="text-align:center;color:var(--mut);font-size:12px;margin:18px 0 6px">Powered by: <a href="https://t.me/LaborantRobot" style="color:var(--ac);text-decoration:none">@LaborantRobot</a> on telegram</div>
@@ -114,6 +115,46 @@ function init(){if(ctx)return;ctx=new(window.AudioContext||window.webkitAudioCon
   vol=ctx.createGain();vol.gain.value=$('vol').value;an.connect(vol);vol.connect(ctx.destination);route()}
 function route(){if(!ctx)return;src.disconnect();made.forEach(n=>{try{n.stop&&n.stop();n.disconnect()}catch(e){}});
   made=build(ctx,src,an);audio.playbackRate=sp();audio.preservesPitch=audio.mozPreservesPitch=audio.webkitPreservesPitch=false}
+
+// ---- ekran (canvas) yozish: vizualizatsiyani + effektlangan ovozni video qilib yozadi
+let rec=null,recDest=null,recChunks=[];
+function recBtnState(active){$('rec').textContent=active?'⏹ Yozishni tugatish':'⏺ Ekran yozish';$('rec').classList.toggle('act',active)}
+$('rec').onclick=async()=>{
+  if(rec&&rec.state==='recording'){rec.stop();return}
+  if(!file)return st('Avval musiqa tanlang.');
+  if(typeof MediaRecorder==='undefined'||!cv.captureStream)return st('Bu brauzer ekran yozishni qo\'llamaydi.');
+  init();await ctx.resume();
+  try{
+    const vTrack=cv.captureStream(30).getVideoTracks()[0];
+    recDest=ctx.createMediaStreamDestination();vol.connect(recDest); // mavjud ovoz chiqishga ta'sir qilmaydi — parallel ulanadi
+    const mixed=new MediaStream([vTrack,...recDest.stream.getAudioTracks()]);
+    const mime=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(t=>MediaRecorder.isTypeSupported(t))||'video/webm';
+    // DIQQAT: bitrate ataylab past (1.5 Mbps) — Telegram bot API fayl yuborish
+    // chegarasi 50MB, shuning uchun uzunroq qo'shiqlarda ham fayl shu chegaradan
+    // oshib ketmasligi kerak (~1.5Mbps = taxminan 4-5 daqiqagacha xavfsiz).
+    rec=new MediaRecorder(mixed,{mimeType:mime,videoBitsPerSecond:1500000});
+    recChunks=[];
+    rec.ondataavailable=e=>{if(e.data&&e.data.size)recChunks.push(e.data)};
+    const t0=performance.now();let rt;
+    rt=setInterval(()=>{$('rect').textContent='⏺ '+Math.floor((performance.now()-t0)/1000)+'s'},500);
+    // Xavfsizlik uchun: 8 daqiqadan oshsa avtomatik to'xtatamiz (fayl hajmi cheklovidan chiqib ketmasin)
+    const maxTimer=setTimeout(()=>{if(rec&&rec.state==='recording'){st('8 daqiqa chegarasiga yetdi, yozuv to\'xtatilmoqda...');rec.stop()}},8*60*1000);
+    rec.onstop=async()=>{
+      clearInterval(rt);clearTimeout(maxTimer);$('rect').textContent='';
+      try{vol.disconnect(recDest)}catch(e){}
+      recBtnState(false);
+      const blob=new Blob(recChunks,{type:mime.split(';')[0]});
+      if(!blob.size)return st('Yozuv bo\'sh chiqdi, qaytadan urinib ko\'ring.');
+      const base=(file.name.replace(/\.[^.]+$/,''))+'_video.webm';
+      st('Video tayyorlanmoqda...');
+      await deliver(blob,base,'video');
+      st('Video tayyor! ✅');
+    };
+    rec.start();recBtnState(true);st('Yozilmoqda...');
+  }catch(e){st('Ekran yozishni boshlab bo\'lmadi: '+e.message)}
+};
+// Qo'shiq tugasa, yozuv ham avtomatik to'xtasin (playlistdagi keyingisiga o'tishdan oldin)
+audio.addEventListener('ended',()=>{if(rec&&rec.state==='recording')rec.stop()});
 
 // ---- playlist
 function add(fs){[...fs].filter(f=>f.type.startsWith('audio')||/\.(m4a|mp3|wav|ogg|flac|aac)$/i.test(f.name)).forEach(f=>list.push(f));
@@ -176,11 +217,12 @@ const lib=()=>window.lamejs?1:new Promise((r,j)=>{const s=document.createElement
 function save(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click()}
 // ---- Telegram orqali yuborish (mavjud bo'lsa), aks holda/hato bo'lsa brauzerdan yuklab olish
 const BOT_API='https://emodzirobot.onrender.com';
-async function deliver(blob,name){
+async function deliver(blob,name,kind){
+  kind=kind||'audio'; // 'audio' yoki 'video' (ekran yozuvi) — bot shunga qarab to'g'ri usulda yuboradi
   const tg=window.Telegram&&window.Telegram.WebApp;
   if(tg&&tg.initData){
     try{
-      const res=await fetch(BOT_API+'/api/music/upload?filename='+encodeURIComponent(name),{method:'POST',body:blob});
+      const res=await fetch(BOT_API+'/api/music/upload?filename='+encodeURIComponent(name)+'&kind='+kind,{method:'POST',body:blob});
       if(!res.ok)throw new Error('upload '+res.status);
       const j=await res.json();
       if(!j||!j.token)throw new Error('token yo\'q');
